@@ -3,8 +3,8 @@
 every example builds on two files from SKILL.md: `src/lib/speech.ts` (the shared instance, `prepareSpeech()`, `onSpeechProgress()` and `preparationLabel()`) and `src/lib/speech-errors.ts` (`speechErrorMessage()`). adjust the import paths to where the project keeps them. the rules are the same in every framework:
 
 - create and call vocule only in the browser: event handlers, effects and mount hooks.
-- await `prepareSpeech()` before every model call, and start one model call at a time.
-- start `listen()` and `record()` from a click or tap, and `listen()` only once the model is ready.
+- prepare before an action when the model should already be ready; inference calls also prepare on demand. start one inference call at a time per instance.
+- start `listen()` and `record()` from a click or tap. these examples prewarm the model before enabling dictation so live text can appear promptly.
 - treat an update with `kind: "final"` as the end of a live session: it also arrives when capture ends on its own.
 - cancel live sessions and recordings when their component unmounts.
 - when one page shows several speech controls, share one busy state between them (or combine them into one component), so the others stay disabled while one runs; otherwise the second call throws `BUSY`.
@@ -36,7 +36,7 @@ works with vite, bun or any bundler that understands npm packages.
 
 ```ts
 // src/main.ts
-import type { RealtimeSession } from "vocule";
+import type { RealtimeSession } from "@karanganesan/vocule";
 import {
   getSpeech,
   onSpeechProgress,
@@ -251,7 +251,7 @@ export function FileTranscriber() {
 ```tsx
 // src/components/dictation.tsx
 import { useEffect, useRef, useState } from "react";
-import type { RealtimeSession } from "vocule";
+import type { RealtimeSession } from "@karanganesan/vocule";
 import { useSpeechModel } from "../hooks/use-speech-model";
 import { getSpeech, prepareSpeech } from "../lib/speech";
 import { speechErrorMessage } from "../lib/speech-errors";
@@ -343,7 +343,7 @@ recording does not need the model, so the record button works while the model is
 ```tsx
 // src/components/recorder.tsx
 import { useEffect, useRef, useState } from "react";
-import type { Recording, RecordingSession } from "vocule";
+import type { Recording, RecordingSession } from "@karanganesan/vocule";
 import { getSpeech, prepareSpeech } from "../lib/speech";
 import { speechErrorMessage } from "../lib/speech-errors";
 
@@ -439,7 +439,7 @@ export default function Page() {
 <!-- src/components/Dictation.vue -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import type { RealtimeSession } from "vocule";
+import type { RealtimeSession } from "@karanganesan/vocule";
 import {
   getSpeech,
   onSpeechProgress,
@@ -556,7 +556,7 @@ svelte 5, with runes:
 <!-- src/lib/Dictation.svelte -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { RealtimeSession } from "vocule";
+  import type { RealtimeSession } from "@karanganesan/vocule";
   import {
     getSpeech,
     onSpeechProgress,
@@ -662,7 +662,7 @@ import {
   afterNextRender,
   signal,
 } from "@angular/core";
-import type { RealtimeSession } from "vocule";
+import type { RealtimeSession } from "@karanganesan/vocule";
 import {
   getSpeech,
   onSpeechProgress,

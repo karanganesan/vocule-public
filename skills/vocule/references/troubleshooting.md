@@ -6,11 +6,11 @@ start with the browser console: vocule's errors carry a stable `code`, and conte
 
 | symptom | likely cause | fix |
 | --- | --- | --- |
-| `BUSY` | a model call while `prepare()`, `transcribe()` or a live session is still running on the same instance | await `prepareSpeech()` and the previous call; disable the controls while one runs; create another instance only for work that truly overlaps |
+| `BUSY` | `transcribe()` or a live session overlaps another inference call on the same instance | await the previous call; disable the controls while one runs; create another instance only for work that truly overlaps |
 | `BUSY` from `pause()` or `resume()` | the recording is not in the state the call needs | check `session.state` first |
 | `BACKEND_UNAVAILABLE` | no usable webgpu (an older browser, plain http on a non-localhost address, a disabled or blocklisted gpu, some virtual machines and remote desktops), or a content security policy blocking the worker | check `isSecureContext` and `"gpu" in navigator`, then the console for a policy error; see [deployment.md](deployment.md) |
-| `MODEL_FORMAT` with "Failed to fetch" | a content security policy without `data:` in `connect-src`, with the built-in worker | add `data:` to `connect-src`, or switch to hosted files |
-| `MODEL_FORMAT` about compiling webassembly | `script-src` without `'wasm-unsafe-eval'` | add it |
+| `BACKEND_UNAVAILABLE` during preparation with a `data:` CSP error in the console | a content security policy without `data:` in `connect-src`, with the built-in worker | add `data:` to `connect-src`, or switch to hosted files |
+| preparation fails with a webassembly compilation CSP error | `script-src` without `'wasm-unsafe-eval'` | add it |
 | `listen()` or `record()` rejects with `AbortError` "Unable to load a worklet's module" | a content security policy blocking the built-in `data:` worklet | add `data:` to `script-src`, or use `assetBaseURL` |
 | `NETWORK` | the model hosts are unreachable: offline, a proxy or ad blocker, or `connect-src` | check the network panel; allow the hosts, or serve the model with `modelBaseURL` |
 | `INTEGRITY` | a mirror or proxy served different bytes | download the files again from the pinned revision, unmodified |
@@ -28,7 +28,7 @@ start with the browser console: vocule's errors carry a stable `code`, and conte
 | empty text | silence, a muted or wrong microphone, raw pcm with the wrong `sampleRate`, or, live, audio below `speechThreshold` | check `onLevel`, the input device and the rate |
 | live text stays in draft | the speaker has not paused | settled text arrives after `silenceMs` of quiet, or at `maxUtteranceMs`; `stop()` settles the rest |
 | `Worker is not defined` or similar during server rendering or tests | a model call outside a browser | move calls into effects and event handlers; mock `src/lib/speech.ts` in unit tests |
-| `ERR_PACKAGE_PATH_NOT_EXPORTED` | `require("vocule")`: the package is es modules only | use `import`, or an esm-capable test runner such as vitest |
+| `ERR_PACKAGE_PATH_NOT_EXPORTED` | `require("@karanganesan/vocule")`: the package is es modules only | use `import`, or an esm-capable test runner such as vitest |
 | the same audio gives slightly different text as mp3 and as wav | compressed formats and resampling change the samples | pass wav or pcm when exact text matters |
 
 ## error codes at a glance

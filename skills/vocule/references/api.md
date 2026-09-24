@@ -1,6 +1,6 @@
 # vocule api reference
 
-the public api of vocule 0.0.5, as published on npm. the declarations in `node_modules/vocule/dist/*.d.ts` are authoritative when this file disagrees with them.
+the public api of vocule 1.0.0, as published on npm. the declarations in `node_modules/@karanganesan/vocule/dist/*.d.ts` are authoritative when this file disagrees with them.
 
 ## contents
 
@@ -17,7 +17,7 @@ the public api of vocule 0.0.5, as published on npm. the declarations in `node_m
 ## `createSpeech(options)`
 
 ```ts
-import { createSpeech } from "vocule";
+import { createSpeech } from "@karanganesan/vocule";
 
 const speech = createSpeech({ onProgress: (event) => console.log(event) });
 ```
@@ -58,16 +58,16 @@ after a cancelled call or a gpu failure, the next call prepares the model again;
 
 ## one call at a time
 
-an instance runs one model operation at a time. `prepare()`, `transcribe()` and a live session from `realtime()` or `listen()` each hold it until they settle, and a call that overlaps them throws `BUSY` instead of waiting (`realtime()` throws synchronously; the others reject).
+an instance runs one inference call at a time. `transcribe()` and live sessions from `realtime()` or `listen()` exclude one another; an overlapping inference call fails with `BUSY` (`realtime()` throws synchronously; the others reject). `prepare()` is not exclusive: callers join the same in-progress preparation, including when an inference call or recording started it. `transcribe()`, `listen()` and `realtime()` prepare on demand.
 
 | already running | `prepare()` | `transcribe()` | `realtime()` / `listen()` | `record()` |
 | --- | --- | --- | --- | --- |
-| `prepare()` | `BUSY` | `BUSY` | `BUSY` | starts |
-| `transcribe()` | `BUSY` | `BUSY` | `BUSY` | starts |
-| live session | `BUSY` | `BUSY` | `BUSY` | starts |
-| recording only | starts | starts | starts | starts |
+| `prepare()` | joins | starts and joins preparation | starts and joins preparation | starts |
+| `transcribe()` | joins or returns ready | `BUSY` | `BUSY` | starts |
+| live session | joins or returns ready | `BUSY` | `BUSY` | starts |
+| recording only | joins or returns ready | starts | starts | starts |
 
-capturing a recording does not use the model, so `record()` can start alongside other work. `clip.transcribe()` is a `transcribe()` call and follows the table. to run model work at the same time, create another instance; each one loads its own copy of the model.
+capturing a recording does not use the model, so `record()` can start alongside other work and begins preparation in the background. `clip.transcribe()` is a `transcribe()` call and follows the table. to run inference at the same time, create another instance; each one loads its own copy of the model.
 
 ## `transcribe(audio, options)`
 
@@ -181,7 +181,7 @@ both return a `RealtimeSession` and hold the instance until it ends. a session s
 
 ## errors
 
-every vocule failure is a `SpeechError` (`import { SpeechError } from "vocule"`) with a stable `code` of type `ErrorCode`; the message is for people.
+every vocule failure is a `SpeechError` (`import { SpeechError } from "@karanganesan/vocule"`) with a stable `code` of type `ErrorCode`; the message is for people.
 
 | code | meaning |
 | --- | --- |
@@ -193,7 +193,7 @@ every vocule failure is a `SpeechError` (`import { SpeechError } from "vocule"`)
 | `NETWORK` | the model could not be downloaded |
 | `INTEGRITY` | downloaded bytes did not match the pinned hashes |
 | `MODEL_FORMAT` | the model files were not what the engine expects |
-| `BUSY` | another operation is running on this instance, or a session is not in the right state for the call |
+| `BUSY` | another inference call is running on this instance, or a session is not in the right state for the call |
 | `BACKPRESSURE` | live audio arrived faster than it could be transcribed |
 | `DISPOSED` | the instance was disposed |
 | `GPU_LOST`, `GPU_ERROR` | the gpu device was lost or failed; the next call prepares again |
@@ -201,14 +201,14 @@ every vocule failure is a `SpeechError` (`import { SpeechError } from "vocule"`)
 
 ## other entry points
 
-the root `vocule` entry also exports `MODEL` (the pinned model's id, revision, hash, size and license) and every public type, such as `AudioInput`, `ListenOptions`, `Progress`, `RealtimeUpdate`, `Recording`, `RecordingSession`, `Speech`, `SpeechOptions` and `Transcript`.
+the root `@karanganesan/vocule` entry also exports `MODEL` (the pinned model's id, revision, hash, size and license) and every public type, such as `AudioInput`, `ListenOptions`, `Progress`, `RealtimeUpdate`, `Recording`, `RecordingSession`, `Speech`, `SpeechOptions` and `Transcript`.
 
 | import | use |
 | --- | --- |
-| `vocule/model` | `MODEL` metadata and the model's source urls (`MODEL_SOURCES`), without the engine; about 1 kb |
-| `vocule/microphone` | `captureMicrophone()` for a short clip (up to 18 seconds) and `streamMicrophoneAudio()` for raw pcm blocks |
-| `vocule/video` | `captureVideo({ source: "camera" \| "screen" })` returns the video and its raw audio, which goes straight to `transcribe()`; a screen share must include audio |
-| `vocule/diagnostics` | `runDiagnostics()`, a quick self-test of this browser's webgpu and webassembly support |
-| `vocule/worker` | the worker module, for `workerFactory` or your own hosting |
+| `@karanganesan/vocule/model` | `MODEL` metadata and the model's source urls (`MODEL_SOURCES`), without the engine; about 1 kb |
+| `@karanganesan/vocule/microphone` | `captureMicrophone()` for a short clip (up to 18 seconds) and `streamMicrophoneAudio()` for raw pcm blocks |
+| `@karanganesan/vocule/video` | `captureVideo({ source: "camera" \| "screen" })` returns the video and its raw audio, which goes straight to `transcribe()`; a screen share must include audio |
+| `@karanganesan/vocule/diagnostics` | `runDiagnostics()`, a quick self-test of this browser's webgpu and webassembly support |
+| `@karanganesan/vocule/worker` | the worker module, for `workerFactory` or your own hosting |
 
 prefer `speech.record()` over the capture helpers for anything longer than a short clip. an import of `MODEL` alone stays about 1 kb; the engine loads when inference starts.
