@@ -120,7 +120,7 @@ capturing a recording does not use the model, so `record()` can start alongside 
 | `segments` | `Segment[]` | empty, because timestamps are not produced |
 | `model` | `{ id, revision, sha256 }` | source checkpoint identity, independent of cdn/archive/pack transport; lowercase public id |
 | `runtime` | `"webgpu-wasm"` | |
-| `verified` | `boolean` | stays `false` until a broad accuracy evaluation exists; not a success flag |
+| `verified` | `boolean` | currently always `false`; not a success flag. aggregate benchmark evidence does not certify an individual transcript |
 | `metrics.audioSeconds` | `number` | input duration |
 | `metrics.wallMs` | `number` | time for the whole call |
 | `metrics.inferenceMs` | `number` | time spent transcribing |
