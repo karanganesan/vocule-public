@@ -1,13 +1,15 @@
 ---
 name: vocule
-description: Integrate the `@karanganesan/vocule` browser speech-to-text package into web apps. Use for vocule file transcription, live dictation, recording, model loading, or deployment across TypeScript web frameworks.
+description: integrate `@karanganesan/vocule` into browser web apps for file transcription, dictation, recording or deployment. from 2.0.0, model is compulsory with a supported lowercase id; distinguish the published 1.x contract.
 ---
 
 # vocule
 
-vocule is private speech to text for web apps. one object from `createSpeech()` downloads a pinned 178 mb model once, keeps it in the browser's cache, and transcribes complete audio, live speech and recordings on the device, in a web worker, on webgpu and webassembly. audio never leaves the page: there is no server, api key or cloud fallback.
+vocule is private speech to text for web apps. a browser inference engine runs a deliberately selected speech to text model on webgpu and webassembly, in a worker off the ui thread. one instance handles complete audio, live speech and recordings, and reuses verified cached model bytes. audio processing stays on the device: there is no speech server, api key or cloud inference fallback. model files download from vocule’s cdn with an immutable hugging face fallback for the same checkpoint.
 
-this skill describes `@karanganesan/vocule` 1.0.0. the installed package is the source of truth: if anything here disagrees with `node_modules/@karanganesan/vocule/dist/index.d.ts`, follow the types, which declare every public option, result and error with comments.
+this review branch describes the **2.0.0 release candidate**. do not apply its new-major calls to a published 1.x install. **`model` is compulsory from 2.0.0**, entirely lowercase: `"fermionresearch/phonon-2"` or `"moondream/parakeet-redux"`, with no sdk default. published 1.x retains its implicit redux choice. missing, undefined, mixed-case or unsupported ids throw `SpeechError("CAPABILITY", ...)` synchronously before side effects. the installed package is the source of truth: if anything here disagrees with `node_modules/@karanganesan/vocule/dist/index.d.ts`, follow the types, which declare every public option, result and error with comments.
+
+the selected checkpoint's original bytes and every reconstructed source weight value stay fixed. engine and cache layout changes preserve those values exactly; compact runtime packing is lossless storage. describe measured speed and quality separately, and keep provider/native reference settings labeled.
 
 ## check the fit first
 
@@ -15,21 +17,21 @@ vocule is for browser and web apps only. before writing code, tell the user plai
 
 - **a server, node, edge function, react native or native app.** every model call needs a browser page with a worker, webgpu and webassembly.
 - **timestamps, subtitles or speaker labels.** transcripts are untimed text. `timestamps: "segment"` or `"word"` throws `CAPABILITY`, and `transcript.segments` is always empty.
-- **browsers without webgpu.** there is no cpu or webgl fallback. vocule needs webgpu, webassembly and a secure context (https or localhost). it was tested in chrome 153 and safari 26.6 on apple silicon; test any other browser or device before calling it supported.
-- **choosing a language or translating.** there is no language option. the model lists 25 languages upstream; english, spanish and french were tested.
-- **a small first load.** the first `prepare()` downloads about 178 mb; later visits load it from the browser's cache.
+- **browsers without webgpu.** there is no cpu or webgl fallback. vocule needs webgpu, webassembly and a secure context (https or localhost). 1.0.0 was tested in chrome 153 and safari 26.6 on apple silicon; final 2.0.0 chrome/safari qualification is pending. test the actual model, browser and device before claiming support.
+- **choosing a language or translating.** there is no language option. phonon-2 is an english model. redux lists 25 languages upstream; english, spanish and french were tested in 1.0.0. no new language support is implied by the major.
+- **a small first load.** the first preparation downloads the selected model’s runtime artifacts; use `getModelDescriptor(id).downloadBytes` from the audited installed release for a transfer hint. checkpoint/container bytes are different from transfer and resident memory. later visits reuse verified extracted or packed cache bytes.
 
 ## integrate
 
-1. **install** with the project's package manager: `npm install @karanganesan/vocule`, `pnpm add @karanganesan/vocule`, `yarn add @karanganesan/vocule` or `bun add @karanganesan/vocule`. there is no framework dependency, and the worker and audio worklet are built in, so there is nothing extra to host or configure.
-2. **share one instance** through the module below, and reuse it for sequential work. creating it makes no request and asks for no permission; each instance loads its own copy of the model.
-3. **prepare at the right moment, with visible progress.** when voice is the page's main purpose, prepare as the page opens. when it is optional, prepare on the first voice action or when the voice panel opens, so visitors who never use it don't download 178 mb. `transcribe()`, `listen()`, `realtime()` and `record()` also start preparation on demand; a caller can await `prepare()` first when the model must be ready before starting. show download progress while it runs.
+1. **check the installed major, then install** with the project's package manager: `npm install @karanganesan/vocule`, `pnpm add @karanganesan/vocule`, `yarn add @karanganesan/vocule` or `bun add @karanganesan/vocule`. this draft's new-major examples require the reviewed 2.0.0 candidate or the matching registry release after the user publishes it; an unversioned install still receives the current public 1.x while publication is held. there is no framework dependency, and the worker and audio worklet are built in, so there is nothing extra to host or configure.
+2. **choose deliberately and share one instance** through the module below, and reuse it for sequential work. pass a required `model` before other common options. creating it makes no request and asks for no permission; each instance loads its own copy of the model.
+3. **prepare at the right moment, with visible progress.** when voice is the page's main purpose, prepare as the page opens. when it is optional, prepare on the first voice action or when the voice panel opens, so visitors who never use it do not download weights. browsing or changing a model picker must not prepare either model. `transcribe()`, `listen()`, `realtime()` and `record()` also start preparation on demand; a caller can await `prepare()` first when the model must be ready before starting. show download progress while it runs.
 4. **pick the call:**
    - `listen()` when text should appear while the person speaks: dictation into a field, captions, voice commands.
    - `record()`, then `clip.transcribe()`, when the text is needed once they finish: voice notes and messages. capture starts even while the model is still downloading, nothing can fall behind, and the audio stays available to play back or keep.
    - `transcribe()` for complete audio the app already has: uploads, urls, blobs, pcm.
    - `realtime()` for live pcm the app produces itself.
-5. **run one inference call at a time per instance.** `transcribe()` and a live session exclude other inference calls; an overlapping call fails with `BUSY`. `prepare()` can overlap and callers share one model load. await the previous inference call or create a second instance for work that must run at the same time. when one page has several speech controls, give them one shared busy state (or put them in one component).
+5. **run one inference call at a time per instance.** `transcribe()` and a live session exclude other inference calls; an overlapping call fails with `BUSY`. `prepare()` can overlap and callers share one model load. await the previous inference call. concurrent instances duplicate residency; create another only when the app truly requires overlapping inference, never to populate a model picker. when one page has several speech controls, give them one shared busy state (or put them in one component).
 6. **handle errors by `code`**, and treat a denied microphone as an ordinary outcome.
 7. **dispose** the instance when its owner goes away. a disposed instance is finished; create a new one.
 8. **verify in a real browser**, as described at the end.
@@ -38,20 +40,25 @@ vocule is for browser and web apps only. before writing code, tell the user plai
 
 ```ts
 // src/lib/speech.ts
-import { createSpeech, type Progress, type Speech } from "@karanganesan/vocule";
+import { createSpeech, type ModelId, type Progress, type Speech } from "@karanganesan/vocule";
 
+let selectedModel: ModelId = "fermionresearch/phonon-2"; // intentional app choice
 let speech: Speech | undefined;
 let preparing: Promise<void> | undefined;
 const listeners = new Set<(event: Progress) => void>();
 
 /** the app's one instance, created on first use. */
 export function getSpeech(): Speech {
-  speech ??= createSpeech({
+  if (speech) return speech;
+  const current = createSpeech({
+    model: selectedModel,
     onProgress: (event) => {
+      if (speech !== current) return; // discard late events from a replaced instance
       for (const listener of listeners) listener(event);
     },
   });
-  return speech;
+  speech = current;
+  return current;
 }
 
 /** download, verify and warm the model once; every caller shares one attempt. */
@@ -79,7 +86,18 @@ export function disposeSpeech(): void {
   speech = undefined;
   preparing = undefined;
 }
+
+/** call only after the owner has stopped/cancelled active work and preserved wanted text. */
+export function selectSpeechModel(model: ModelId): void {
+  if (model === selectedModel) return;
+  disposeSpeech();
+  selectedModel = model; // no creation, download or microphone request
+}
 ```
+
+the helper’s phonon choice is app state, not an sdk default. to retain redux, initialize `selectedModel` to `"moondream/parakeet-redux"`. a fixed-model app can import its factory from `@karanganesan/vocule/phonon-2` or `@karanganesan/vocule/parakeet-redux`; keep the matching required id. the root factory lazily dispatches, while a lean entry excludes the other engine.
+
+for a selector, finish or cancel capture first, preserve only an intentionally awaited final text, release app-owned streams, dispose the old instance, then call `selectSpeechModel()`. fence late updates, errors, progress and pending microphone resolutions with an owner/session generation. leave the next preparation and capture behind an explicit start/resume action. cancel a late returned session; stop late app-owned tracks. never prepare two choices just to browse them. recordings transcribe through their original instance, so finish them before replacing it.
 
 call `prepareSpeech()` when the app wants to warm the model before an action. inference calls also prepare on demand and join an in-progress preparation; they do not fail with `BUSY` because the model is loading. `speech.ready` reports whether the model is currently loaded. keep overlapping inference calls separate.
 
@@ -108,14 +126,14 @@ export function preparationLabel(event: Progress): string | undefined {
 
 ```ts
 // src/lib/transcribe-file.ts
-import { getSpeech, prepareSpeech } from "./speech";
+import { getSpeech } from "./speech";
 
 export async function transcribeFile(
   file: File,
   signal?: AbortSignal,
 ): Promise<string> {
-  await prepareSpeech();
-  const transcript = await getSpeech().transcribe(file, { signal });
+  const current = getSpeech();
+  const transcript = await current.transcribe(file, { signal });
   return transcript.text;
 }
 ```
@@ -129,33 +147,23 @@ export async function transcribeFile(
 
 ### live microphone text
 
-call `listen()` from a click or tap: it may show the browser's permission prompt. the examples below prewarm the model so live text appears promptly. if it is still loading, `listen()` can capture and queue audio during preparation, subject to `maxQueuedSeconds`; avoid delaying the permission prompt until after a first download.
+call `listen()` from a click or tap: it may show the browser's permission prompt. a ready model makes live text prompt. if it is still loading, `listen()` can capture and queue audio during preparation, subject to `maxQueuedSeconds`; avoid delaying the permission prompt until after a first download. if the product prepares before inference, visibly say to wait until listening before speaking. the controller in [references/frameworks.md](references/frameworks.md#shared-dictation-owner) fences late microphone resolutions, errors and text; copy it alongside the shared helper before using this integration:
 
 ```ts
-// src/lib/dictation.ts
-import type { RealtimeSession, RealtimeUpdate } from "@karanganesan/vocule";
-import { getSpeech } from "./speech";
+// src/dictation.ts
+import { createDictation } from "./lib/dictation-controller";
+import { speechErrorMessage } from "./lib/speech-errors";
 
-let live: RealtimeSession | undefined;
-
-export async function startDictation(
-  render: (update: RealtimeUpdate) => void,
-  fail: (error: unknown) => void,
-): Promise<void> {
-  live = await getSpeech().listen({
-    onUpdate: (update) => {
-      if (update.kind === "final") live = undefined; // the session is over
-      render(update);
-    },
-    onError: fail,
-  });
-}
-
-export async function stopDictation(): Promise<string> {
-  const session = live;
-  live = undefined;
-  return session ? session.stop() : "";
-}
+const output = document.querySelector<HTMLElement>("#transcript")!;
+const status = document.querySelector<HTMLElement>("#status")!;
+const dictation = createDictation({
+  render: (text) => { output.textContent = text; },
+  state: (value) => { status.textContent = value; },
+  fail: (error) => { status.textContent = speechErrorMessage(error) ?? ""; },
+});
+document.querySelector("#start")!.addEventListener("click", () => { void dictation.start(); });
+document.querySelector("#stop")!.addEventListener("click", () => { void dictation.stop(); });
+window.addEventListener("pagehide", () => { dictation.cancel(); });
 ```
 
 - every update carries the whole view. render `update.text`, which is `settledText` followed by `draftText`. the draft is revised as speech continues; settled text and `segments` only grow. `kind` is `"draft"`, `"settled"` or `"final"`.
@@ -171,29 +179,26 @@ export async function stopDictation(): Promise<string> {
 ```ts
 // src/lib/recording.ts
 import type { RecordingSession } from "@karanganesan/vocule";
-import { getSpeech, prepareSpeech } from "./speech";
+import { getSpeech } from "./speech";
 
-let session: RecordingSession | undefined;
-
-export async function startRecording(): Promise<void> {
-  session = await getSpeech().record(); // from a click or tap
+export async function startRecording(signal: AbortSignal) {
+  const session = await getSpeech().record({ signal }); // from a click or tap
+  if (signal.aborted) { await session.cancel(); return undefined; }
+  return session;
 }
 
-export async function finishRecording() {
-  if (!session) throw new Error("no recording in progress");
+export async function finishRecording(session: RecordingSession, signal: AbortSignal) {
   const clip = await session.stop();
-  session = undefined;
-  await prepareSpeech();
-  const transcript = await clip.transcribe();
+  const transcript = await clip.transcribe({ signal });
   return { clip, text: transcript.text };
 }
 ```
 
-`record()` never waits for the model, and it starts preparing it in the background. the session has `pause()`, `resume()`, `cancel()`, `state` and `durationSeconds`. the clip is uncompressed pcm (`samples`, `sampleRate`, `durationSeconds`), with `clip.wav` as a lazily encoded wav `Blob` and `clip.play()`, which resolves to an `HTMLAudioElement`. `clip.transcribe()` uses the instance that recorded it, so do not dispose that instance first.
+`record()` never waits for the model, and it starts preparing it in the background. the owning view creates an `AbortController`, aborts it and cancels its session at cleanup, and accepts only its current generation's results. the session has `pause()`, `resume()`, `cancel()`, `state` and `durationSeconds`. the clip is uncompressed pcm (`samples`, `sampleRate`, `durationSeconds`), with `clip.wav` as a lazily encoded wav `Blob` and `clip.play()`, which resolves to an `HTMLAudioElement`. `clip.transcribe()` uses the instance that recorded it, so finish before disposing or selecting another model.
 
 ### errors
 
-every vocule failure is a `SpeechError` with a stable `code`. microphone problems arrive as the browser's own `DOMException`.
+engine failures use `SpeechError` with a stable `code`. microphone problems can also arrive as the browser's own `DOMException`.
 
 ```ts
 // src/lib/speech-errors.ts
@@ -205,8 +210,8 @@ export function speechErrorMessage(error: unknown): string | undefined {
     return "microphone access is blocked. allow it in the site settings and try again.";
   if (error instanceof DOMException && error.name === "NotFoundError")
     return "no microphone was found.";
-  if (error instanceof DOMException && error.name === "NotReadableError")
-    return "the microphone is in use by another app. close it and try again.";
+  if (error instanceof DOMException && (error.name === "NotReadableError" || error.name === "OverconstrainedError"))
+    return "the microphone could not be opened. check that it is connected and available, then try again.";
   if (!(error instanceof SpeechError))
     return "something went wrong. please try again.";
   switch (error.code) {
@@ -214,13 +219,13 @@ export function speechErrorMessage(error: unknown): string | undefined {
     case "DISPOSED":
       return undefined;
     case "BACKEND_UNAVAILABLE":
-      return "this browser can't run speech recognition on this device. try a recent chrome or safari.";
+      return "this browser could not start the speech engine. try a supported browser and device.";
     case "NETWORK":
       return "the speech model could not be downloaded. check the connection and try again.";
     case "AUDIO_INVALID":
       return "this file could not be read as audio.";
     case "BACKPRESSURE":
-      return "speech recognition fell behind. stop and start again.";
+      return "this device could not keep up with live speech. try again.";
     case "BUSY":
       return "speech recognition is still busy. wait for it to finish.";
     default:
@@ -242,7 +247,7 @@ export function speechErrorMessage(error: unknown): string | undefined {
 
 ## content security policy and hosting
 
-skip this section when the site sends no content security policy. otherwise choose one of two setups, both checked in chromium under a real policy header:
+skip this section when the site sends no content security policy. otherwise choose one of two setups. these policies were checked in chromium for 1.0.0 under a real policy header; repeat the checks with each actual 2.0.0 worker before claiming qualification:
 
 | directive | built-in worker (default) | hosted files (`assetBaseURL`) |
 | --- | --- | --- |
@@ -251,17 +256,18 @@ skip this section when the site sends no content security policy. otherwise choo
 | `connect-src` | the model hosts and `data:` | the model hosts and `'self'` |
 | `media-src` | `blob:`, for `clip.play()` | `blob:`, for `clip.play()` |
 
-the model hosts are `https://cdn.karanganesan.com`, plus `https://huggingface.co` and `https://*.hf.co` for the fallback, or the origin given as `modelBaseURL`. the built-in worker loads its webassembly from a `data:` url, so without `data:` in `connect-src` preparation fails with `BACKEND_UNAVAILABLE`. for hosted files, copy `node_modules/@karanganesan/vocule/dist/` to a same-origin folder and pass `createSpeech({ assetBaseURL: "/vocule/" })`.
+the model hosts are `https://cdn.karanganesan.com`, plus `https://huggingface.co` and `https://*.hf.co` for the fallback, or the origin given as `modelBaseURL`. the built-in worker loads its webassembly from a `data:` url, so without `data:` in `connect-src` preparation fails with `BACKEND_UNAVAILABLE`. for hosted files, copy `node_modules/@karanganesan/vocule/dist/` to a same-origin folder and pass `createSpeech({ model: "fermionresearch/phonon-2", assetBaseURL: "/vocule/" })`. for a lean hosted entry, copy its model directory and point `assetBaseURL` at that directory, whose `worker.js` must match the selected id and package version.
 
 [references/deployment.md](references/deployment.md) has complete policies, the copy commands, the model mirror, caching and bundler notes.
 
 ## verify
 
-1. run the app on localhost or https and open it in a browser with webgpu, such as chrome or safari 26. `"gpu" in navigator` should be true.
+1. run the app on localhost or https and open it in a browser with webgpu, such as a recent chrome or safari on a supported device. `"gpu" in navigator` should be true; actual preparation still checks the adapter's limits.
 2. prepare once, watch the download reach 100%, then transcribe a short clip and check the text. reload the page: the network panel should show no second model download, and preparation should finish much sooner.
 3. for live speech, allow the microphone, speak, stop, and check the final text. deny the permission once and check that the app says so.
 4. check the browser console for errors, then repeat in the production build (`vite build` and `vite preview`, `next build` and `next start`, and so on), since bundlers differ.
-5. do not quote vocule's published speeds as the app's own; they were measured on a macbook air m4.
+5. test both selected ids where the app offers them, including switch while preparing/listening, rapid selection, cancellation, reload/cache and wrong/stale hosted workers. selecting alone must produce no weights or microphone request.
+6. do not quote historical 1.x results as 2.0.0 or phonon results. release figures require final package/worker/model/input hashes, a shared device/browser session, timing boundaries and raw samples; phone layout is not proof of phone inference support.
 
 ## reference files
 
