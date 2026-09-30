@@ -17,8 +17,8 @@ from 2.0.0, every factory call requires a lowercase `model`, with no sdk default
 ```ts
 import { createSpeech } from "@karanganesan/vocule";
 
-const speech = createSpeech({ model: "fermionresearch/phonon-2" });
-// alternative: createSpeech({ model: "moondream/parakeet-redux" })
+const speech = createSpeech({ model: "moondream/parakeet-redux" });
+// alternative: createSpeech({ model: "fermionresearch/phonon-2" })
 ```
 
 choose one instance for the feature. other options, file transcription, live dictation and recording share the same contract. selecting a model does not download it; preparation and inference start loading. audio processing stays on the device. model files download from vocule’s cdn with an immutable hugging face fallback for the same checkpoint, without a speech inference server.

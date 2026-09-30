@@ -42,7 +42,7 @@ vocule is for browser and web apps only. before writing code, tell the user plai
 // src/lib/speech.ts
 import { createSpeech, type ModelId, type Progress, type Speech } from "@karanganesan/vocule";
 
-let selectedModel: ModelId = "fermionresearch/phonon-2"; // intentional app choice
+let selectedModel: ModelId = "moondream/parakeet-redux"; // intentional app choice
 let speech: Speech | undefined;
 let preparing: Promise<void> | undefined;
 const listeners = new Set<(event: Progress) => void>();
@@ -95,7 +95,7 @@ export function selectSpeechModel(model: ModelId): void {
 }
 ```
 
-the helper’s phonon choice is app state, not an sdk default. to retain redux, initialize `selectedModel` to `"moondream/parakeet-redux"`. a fixed-model app can import its factory from `@karanganesan/vocule/phonon-2` or `@karanganesan/vocule/parakeet-redux`; keep the matching required id. the root factory lazily dispatches, while a lean entry excludes the other engine.
+the helper’s redux choice is app state, not an sdk default. to use phonon-2, initialize `selectedModel` to `"fermionresearch/phonon-2"`. a fixed-model app can import its factory from `@karanganesan/vocule/phonon-2` or `@karanganesan/vocule/parakeet-redux`; keep the matching required id. the root factory lazily dispatches, while a lean entry excludes the other engine.
 
 for a selector, finish or cancel capture first, preserve only an intentionally awaited final text, release app-owned streams, dispose the old instance, then call `selectSpeechModel()`. fence late updates, errors, progress and pending microphone resolutions with an owner/session generation. leave the next preparation and capture behind an explicit start/resume action. cancel a late returned session; stop late app-owned tracks. never prepare two choices just to browse them. recordings transcribe through their original instance, so finish them before replacing it.
 
@@ -256,7 +256,7 @@ skip this section when the site sends no content security policy. otherwise choo
 | `connect-src` | the model hosts and `data:` | the model hosts and `'self'` |
 | `media-src` | `blob:`, for `clip.play()` | `blob:`, for `clip.play()` |
 
-the model hosts are `https://cdn.karanganesan.com`, plus `https://huggingface.co` and `https://*.hf.co` for the fallback, or the origin given as `modelBaseURL`. the built-in worker loads its webassembly from a `data:` url, so without `data:` in `connect-src` preparation fails with `BACKEND_UNAVAILABLE`. for hosted files, copy `node_modules/@karanganesan/vocule/dist/` to a same-origin folder and pass `createSpeech({ model: "fermionresearch/phonon-2", assetBaseURL: "/vocule/" })`. for a lean hosted entry, copy its model directory and point `assetBaseURL` at that directory, whose `worker.js` must match the selected id and package version.
+the model hosts are `https://cdn.karanganesan.com`, plus `https://huggingface.co` and `https://*.hf.co` for the fallback, or the origin given as `modelBaseURL`. the built-in worker loads its webassembly from a `data:` url, so without `data:` in `connect-src` preparation fails with `BACKEND_UNAVAILABLE`. for hosted files, copy `node_modules/@karanganesan/vocule/dist/` to a same-origin folder and pass `createSpeech({ model: "moondream/parakeet-redux", assetBaseURL: "/vocule/" })`. for a lean hosted entry, copy its model directory and point `assetBaseURL` at that directory, whose `worker.js` must match the selected id and package version.
 
 [references/deployment.md](references/deployment.md) has complete policies, the copy commands, the model mirror, caching and bundler notes.
 
