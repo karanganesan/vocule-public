@@ -9,7 +9,7 @@ vocule is private speech to text for web apps. a browser inference engine runs a
 
 this review branch describes the **2.0.0 release candidate**. do not apply its new-major calls to a published 1.x install. **`model` is compulsory from 2.0.0**, entirely lowercase: `"fermionresearch/phonon-2"` or `"moondream/parakeet-redux"`, with no sdk default. published 1.x retains its implicit redux choice. missing, undefined, mixed-case or unsupported ids throw `SpeechError("CAPABILITY", ...)` synchronously before side effects. the installed package is the source of truth: if anything here disagrees with `node_modules/@karanganesan/vocule/dist/index.d.ts`, follow the types, which declare every public option, result and error with comments.
 
-the selected checkpoint's original bytes and every reconstructed source weight value stay fixed. engine and cache layout changes preserve those values exactly; compact runtime packing is lossless storage. describe measured speed and quality separately, and keep provider/native reference settings labeled.
+the selected checkpoint's original bytes and every reconstructed source weight value stay fixed. engine and cache layout changes preserve those values exactly; compact runtime packing is lossless storage. describe measured speed and quality separately, and keep provider/native reference settings labeled. current 2.0.0 speed observations use sparse n15 chrome, n5 safari/native and n1 long-file cells under observed background load; keep jane 3.4 s and jfk 11 s separate. long timing is the first public file call after preparation and input validation, including actual lazy compilation inside the call. do not describe it as warm, cold-start, corpus-wide or a completed performance qualification.
 
 ## check the fit first
 
@@ -17,7 +17,7 @@ vocule is for browser and web apps only. before writing code, tell the user plai
 
 - **a server, node, edge function, react native or native app.** every model call needs a browser page with a worker, webgpu and webassembly.
 - **timestamps, subtitles or speaker labels.** transcripts are untimed text. `timestamps: "segment"` or `"word"` throws `CAPABILITY`, and `transcript.segments` is always empty.
-- **browsers without webgpu.** there is no cpu or webgl fallback. vocule needs webgpu, webassembly and a secure context (https or localhost). 1.0.0 was tested in chrome 153 and safari 26.6 on apple silicon; final 2.0.0 chrome/safari qualification is pending. test the actual model, browser and device before claiming support.
+- **browsers without webgpu.** there is no cpu or webgl fallback. vocule needs webgpu, webassembly and a secure context (https or localhost). the audited 2.0.0 candidate passed both-model correctness and capture checks in chrome 153 and native safari 27 on the tested m4 macbook air. sparse performance observations do not complete the planned performance or repeated memory qualification. test the actual model, browser and device before claiming support.
 - **choosing a language or translating.** there is no language option. phonon-2 is an english model. redux lists 25 languages upstream; english, spanish and french were tested in 1.0.0. no new language support is implied by the major.
 - **a small first load.** the first preparation downloads the selected model’s runtime artifacts; use `getModelDescriptor(id).downloadBytes` from the audited installed release for a transfer hint. checkpoint/container bytes are different from transfer and resident memory. later visits reuse verified extracted or packed cache bytes.
 

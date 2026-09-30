@@ -134,14 +134,14 @@ const speech = createSpeech({
 
 - vocule is es modules only; use `import`. `require("@karanganesan/vocule")` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 - browser bundlers select the browser export condition. root factories dispatch lazily; a lean entry excludes the other adapter/reader/worker assets and still requires its matching id. verify actual production output, including inline-worker contents, rather than assuming a root runtime string guarantees elimination.
-- metadata imports no worker, wasm or engine. 1.0.0's metadata-only consumer measured 959 bytes; final packed 2.0.0 emitted-byte measurements are pending.
+- metadata imports no worker, wasm or engine. the audited 2.0.0 vite fixture importing the descriptor and cache-status helpers emitted 4,994 javascript bytes; the legacy `MODEL`-only fixture emitted 959 bytes. application and bundler choices change emitted size.
 - vite and bun need no special configuration. test production preparation/transcription with the target bundler; hosted files are available when its worker handling requires them.
 - imports during server rendering have no model side effects, but model calls belong in browser events/effects/mount hooks.
 - jsdom unit tests lack webgpu/workers. mock the app's shared `src/lib/speech.ts` and use real browser tests for inference, inline/hosted/csp paths, capture, cancellation and both choices.
 
 ## browser support
 
-vocule needs webgpu, webassembly and https or localhost. published 1.0.0 was tested in chrome 153 and safari 26.6 on apple silicon; final 2.0.0 per-model chrome/safari qualification is pending. other devices, phones, low-memory adapters and browsers need their own evidence. phone layout testing does not prove phone inference support. no full-model wasm-only/webgl or cloud inference fallback is shipped.
+vocule needs webgpu, webassembly and https or localhost. the audited 2.0.0 candidate passed both-model correctness and capture checks in chrome 153 and native safari 27 on the tested m4 macbook air. performance observations are sparse and recorded under background load; safari live and long-file timings were not measured, and the planned performance and repeated memory qualification remains incomplete. other devices, phones, low-memory adapters and browsers need their own evidence. phone layout testing does not prove phone inference support. no full-model wasm-only/webgl or cloud inference fallback is shipped.
 
 ```ts
 export function mightSupportSpeech(): boolean {
