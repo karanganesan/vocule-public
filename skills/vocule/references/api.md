@@ -1,6 +1,6 @@
 # vocule api reference
 
-the public api of vocule 1.0.0, as published on npm. the declarations in `node_modules/@karanganesan/vocule/dist/*.d.ts` are authoritative when this file disagrees with them.
+draft public api for the **2.0.0 release candidate**. published 1.x keeps its implicit redux factory; new-major examples below require 2.0.0. the declarations in `node_modules/@karanganesan/vocule/dist/*.d.ts` are authoritative when this file disagrees with them.
 
 ## contents
 
@@ -19,19 +19,31 @@ the public api of vocule 1.0.0, as published on npm. the declarations in `node_m
 ```ts
 import { createSpeech } from "@karanganesan/vocule";
 
-const speech = createSpeech({ onProgress: (event) => console.log(event) });
+const speech = createSpeech({
+  model: "fermionresearch/phonon-2",
+  onProgress: (event) => console.log(event),
+});
 ```
 
-the factory makes no network request and asks for no permission.
+the factory makes no network request and asks for no permission. **`model` is compulsory from 2.0.0**, entirely lowercase, and immutable for the instance. missing options/model, `undefined`, an empty string, a mixed-case or unknown id throws `SpeechError("CAPABILITY", ...)` synchronously before workers, downloads or capture. there is no sdk default and no automatic switch to the other model.
+
+```ts
+// published 1.x only: createSpeech() or createSpeech({ onProgress })
+// 2.0.0: retain the old checkpoint deliberately
+const redux = createSpeech({ model: "moondream/parakeet-redux" });
+```
+
+all other options, methods, events and ownership rules are common. select again by stopping/cancelling active work, disposing, and creating a new instance when the user explicitly starts it. mutating the old options object cannot retarget an instance.
 
 | option | type | default | effect |
 | --- | --- | --- | --- |
+| `model` | `ModelId`: `"fermionresearch/phonon-2"` or `"moondream/parakeet-redux"` | required; none | selects the pinned checkpoint for this instance |
 | `onProgress` | `(event: Progress) => void` | none | receives preparation and inference progress |
 | `cache` | `boolean` | `true` | keeps the verified model in the browser's cache storage for later visits |
-| `modelBaseURL` | `string` | vocule's cdn, then hugging face | a directory serving the pinned revision's `config.json`, `ternary.json`, `tokenizer.json` and `model.safetensors`, used instead of the defaults with no fallback; the pinned hashes still apply |
-| `artifactHashes` | `Record<"config.json" \| "ternary.json" \| "tokenizer.json", string>` | pinned hashes | only for a mirror that intentionally serves different metadata bytes |
-| `assetBaseURL` | `string \| URL` | built-in worker and worklet | a same-origin directory holding a copy of the package's `dist/`, for strict content security policies |
-| `workerFactory` | `() => Worker` | none | builds the worker yourself; takes priority over `assetBaseURL` |
+| `modelBaseURL` | `string` | vocule's cdn, then hugging face | a directory serving the selected descriptor’s exact pinned delivery representation, used instead of default sources with no fallback; checkpoint and metadata hashes still apply |
+| `artifactHashes` | `ReduxHashes` or `PhononHashes`, discriminated by `model` | pinned hashes | redux: `config.json`, `ternary.json`, `tokenizer.json`; phonon: `config.json`, `packed_manifest.json`. metadata overrides do not change checkpoint, architecture or weight pins |
+| `assetBaseURL` | `string \| URL` | built-in worker and worklet | a same-origin directory holding the root `dist/` or the matching lean model directory, for strict content security policies |
+| `workerFactory` | `() => Worker` | none | zero-argument factory; takes priority over `assetBaseURL`. the supplied worker must handshake with this version and supported model |
 
 `Progress` is `{ phase, completed?, total?, detail? }`:
 
@@ -53,6 +65,8 @@ the factory makes no network request and asks for no permission.
 | `listen(options)` | `Promise<RealtimeSession>` | a live session fed by the microphone or a supplied `MediaStream` |
 | `record(options)` | `Promise<RecordingSession>` | captures a clip and prepares the model in the background |
 | `dispose()` | `void` | cancels active work and releases the instance |
+
+the stable runtime family is `"webgpu-wasm"`, not a report of individual stage placement. no full-model wasm-only/webgl or cloud inference fallback is supplied.
 
 after a cancelled call or a gpu failure, the next call prepares the model again; with the model cached, that needs no download.
 
@@ -104,15 +118,26 @@ capturing a recording does not use the model, so `record()` can start alongside 
 | --- | --- | --- |
 | `text` | `string` | the transcript |
 | `segments` | `Segment[]` | empty, because timestamps are not produced |
-| `model` | `{ id, revision, sha256 }` | the checkpoint that produced it |
+| `model` | `{ id, revision, sha256 }` | source checkpoint identity, independent of cdn/archive/pack transport; lowercase public id |
 | `runtime` | `"webgpu-wasm"` | |
-| `verified` | `boolean` | stays `false` until a broad accuracy evaluation exists; not a success flag |
+| `verified` | `boolean` | currently always `false`; not a success flag. aggregate benchmark evidence does not certify an individual transcript |
 | `metrics.audioSeconds` | `number` | input duration |
 | `metrics.wallMs` | `number` | time for the whole call |
 | `metrics.inferenceMs` | `number` | time spent transcribing |
-| `metrics.realtimeFactor` | `number` | processing time divided by audio duration, so lower is faster: `0.0175` is about 57× real time (`1 / realtimeFactor`) |
+| `metrics.realtimeFactor` | `number` | processing time divided by audio duration, so lower is faster: distinct from complete-call throughput `audioSeconds / (wallMs / 1000)` |
 | `metrics.windows` | `{ startSeconds, endSeconds }[]` | the windows used for a long recording |
 | `warnings` | `string[]` | notes about the result; today every transcript carries the same standing notes, so log them instead of showing them as errors |
+
+### selected checkpoint identity
+
+| public id | source revision | source checkpoint sha-256 |
+| --- | --- | --- |
+| `fermionresearch/phonon-2` | `e357655f6325aa70d4800d125273a5ed3a703b9c` | `4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c11468` (`model.fermion`) |
+| `moondream/parakeet-redux` | `a049528989ebbc6097c6478551266f1e3d26d1b3` | `78ec25733ee0d0c1586d1346fc86db9d0c2e436e3a8ab1d32a82d1bb8f848d21` (`model.safetensors`) |
+
+phonon’s canonical source id is `FermionResearch/Phonon-2`; preserve that case only in source urls and provenance. archive and deterministic repack hashes live in descriptors/provenance, not in `Transcript.model`.
+
+the source checkpoint keeps its original bytes and every reconstructed weight value. exact engine/cache layouts may have their own format version and storage hash while preserving the source identity and values. benchmark speed and quality as separate measurements.
 
 ## `realtime(options)` and `listen(options)`
 
@@ -125,7 +150,7 @@ both return a `RealtimeSession` and hold the instance until it ends. a session s
 | `signal` | `AbortSignal` | none | cancels the session |
 | `draftIntervalMs` | `number` | `100` | time between draft attempts while speech is active; `0` turns drafts off |
 | `vad` | `boolean` | `true` | `false` settles fixed-length segments without detecting speech |
-| `speechThreshold` | `number` | `0.006` | rms level that opens an utterance |
+| `speechThreshold` | `number` | `0.006` | rms level that opens an utterance; the shared live energy gate is separate from a model-specific long-file planner |
 | `silenceMs` | `number` | `700` | trailing silence that settles an utterance |
 | `minSpeechMs` | `number` | `120` | continuous speech needed to open an utterance |
 | `preRollMs` | `number` | `240` | audio kept from before speech started |
@@ -181,7 +206,7 @@ both return a `RealtimeSession` and hold the instance until it ends. a session s
 
 ## errors
 
-every vocule failure is a `SpeechError` (`import { SpeechError } from "@karanganesan/vocule"`) with a stable `code` of type `ErrorCode`; the message is for people.
+engine failures use `SpeechError` (`import { SpeechError } from "@karanganesan/vocule"`) with a stable `code` of type `ErrorCode`; the message is for people. microphone failures can also arrive as the browser's own `DOMException`, as described under `listen()`.
 
 | code | meaning |
 | --- | --- |
@@ -189,7 +214,7 @@ every vocule failure is a `SpeechError` (`import { SpeechError } from "@karangan
 | `AUDIO_INVALID` | the input could not be read or decoded |
 | `AUDIO_TOO_LONG` | reserved; complete files have no duration cap, so no current call raises it |
 | `BACKEND_UNAVAILABLE` | no usable webgpu adapter, or the worker could not start |
-| `CAPABILITY` | an unsupported option, such as timestamps, or a missing browser capability, such as an audio track or a capture api |
+| `CAPABILITY` | missing/invalid model at the factory; wrong/stale or unsupported-model worker; unsupported options or missing browser features |
 | `NETWORK` | the model could not be downloaded |
 | `INTEGRITY` | downloaded bytes did not match the pinned hashes |
 | `MODEL_FORMAT` | the model files were not what the engine expects |
@@ -201,14 +226,37 @@ every vocule failure is a `SpeechError` (`import { SpeechError } from "@karangan
 
 ## other entry points
 
-the root `@karanganesan/vocule` entry also exports `MODEL` (the pinned model's id, revision, hash, size and license) and every public type, such as `AudioInput`, `ListenOptions`, `Progress`, `RealtimeUpdate`, `Recording`, `RecordingSession`, `Speech`, `SpeechOptions` and `Transcript`.
+the root entry exports the public types, including `ModelId`, `SpeechOptions`, `BrowserOptions`, `ReduxHashes`, `PhononHashes` and existing audio/session/result types. metadata helpers are also available without an engine import:
+
+```ts
+import { getModelDescriptor, getModelCacheStatus } from "@karanganesan/vocule/model";
+
+const descriptor = getModelDescriptor("fermionresearch/phonon-2");
+const cache = await getModelCacheStatus(descriptor.id); // presence only, no fetch/hash
+console.log(descriptor.downloadBytes, cache.complete);
+```
+
+`ModelDescriptor` is immutable. it includes lowercase `id`, canonical `sourceId`, label, revision, source checkpoint `sha256`/`bytes`, `downloadBytes`, format/pack version, sample rate, license/attribution/source link, delivery sources, runtime artifacts with names/bytes/hashes/mime, cache identity and capabilities. `getModelCacheStatus(id)` reports `{ weights, metadata, complete }` as a best-effort presence hint. preparation still verifies cached bytes; a complete hint is not an integrity promise. readiness in memory does not prove persistent cache writes succeeded. neither helper creates a worker, downloads weights or asks for a microphone.
+
+`MODEL` is deprecated fixed-redux metadata. legacy `MODEL_BASE_URL`, `MODEL_CDN_URL` and `MODEL_SOURCES` remain fixed redux exports; they never fill a missing factory choice.
 
 | import | use |
 | --- | --- |
-| `@karanganesan/vocule/model` | `MODEL` metadata and the model's source urls (`MODEL_SOURCES`), without the engine; about 1 kb |
+| `@karanganesan/vocule/model` | explicit metadata/cache lookup plus fixed-redux legacy constants; no engine graph |
+| `@karanganesan/vocule/phonon-2` | lean factory, with required matching `model: "fermionresearch/phonon-2"`; excludes the redux adapter/worker assets |
+| `@karanganesan/vocule/parakeet-redux` | lean factory, with required matching `model: "moondream/parakeet-redux"`; excludes the phonon adapter/reader/worker assets |
 | `@karanganesan/vocule/microphone` | `captureMicrophone()` for a short clip (up to 18 seconds) and `streamMicrophoneAudio()` for raw pcm blocks |
-| `@karanganesan/vocule/video` | `captureVideo({ source: "camera" \| "screen" })` returns the video and its raw audio, which goes straight to `transcribe()`; a screen share must include audio |
-| `@karanganesan/vocule/diagnostics` | `runDiagnostics()`, a quick self-test of this browser's webgpu and webassembly support |
-| `@karanganesan/vocule/worker` | the worker module, for `workerFactory` or your own hosting |
+| `@karanganesan/vocule/video` | `captureVideo({ source: "camera" \| "screen" })` returns video and raw audio; a screen share must include audio |
+| `@karanganesan/vocule/diagnostics` | `runDiagnostics()`, a browser webgpu/webassembly self-test |
+| `@karanganesan/vocule/worker` | root hosted/custom worker dispatcher |
+| `@karanganesan/vocule/phonon-2/worker` | matching phonon hosted/custom worker |
+| `@karanganesan/vocule/parakeet-redux/worker` | matching redux hosted/custom worker |
 
-prefer `speech.record()` over the capture helpers for anything longer than a short clip. an import of `MODEL` alone stays about 1 kb; the engine loads when inference starts.
+```ts
+import { createSpeech } from "@karanganesan/vocule/phonon-2";
+const speech = createSpeech({ model: "fermionresearch/phonon-2" });
+```
+
+root lazy dispatch and lean exclusion are separate properties. a runtime model string at the root does not promise that the other engine disappears from the emitted package. the audited 2.0.0 vite consumer importing `getModelDescriptor` and `getModelCacheStatus` emitted **4,994 javascript bytes**; the legacy `MODEL`-only fixture emitted **959 bytes**. these are particular consumer builds, not the npm archive, weights, memory or complete application size. prefer `speech.record()` for recordings longer than the short capture helper limit.
+
+final 2.0.0 observations keep complete-file time, predecoded pcm, `stop()` to final text and verified-cache preparation separate. the long result is one first public file call after preparation and input validation, including actual lazy compilation inside that call. jane 3.4 s and jfk 11 s have separate distributions. background load and sparse n15/n5/n1 cells limit the claim; the planned performance and repeated memory qualification remains incomplete.

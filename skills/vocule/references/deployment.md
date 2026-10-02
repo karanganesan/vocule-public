@@ -1,5 +1,7 @@
 # deployment
 
+draft guidance for the **2.0.0 release candidate**. published 1.x selects redux implicitly; every new-major factory call below requires a selected model. validate against the packed declarations and matching worker assets.
+
 ## contents
 
 - [content security policy](#content-security-policy)
@@ -12,15 +14,15 @@
 
 ## content security policy
 
-skip this section when the site sends no `content-security-policy` header or meta tag. otherwise choose one of two setups. both were checked in chromium under a real policy header, with preparation, transcription, recording and playback.
+skip this section when the site sends no policy. the 1.0.0 policies below were checked in chromium under a real header with preparation, transcription, recording and playback. repeat those checks for each 2.0.0 model and root/lean delivery; historical tests do not qualify a new worker.
 
-**built-in worker (the default).** nothing extra to host:
+**built-in worker.** nothing extra to host:
 
 ```text
 Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' data:; worker-src 'self' blob:; connect-src 'self' data: https://cdn.karanganesan.com https://huggingface.co https://*.hf.co; media-src 'self' blob:
 ```
 
-**hosted files (`assetBaseURL`).** no `blob:` or `data:` sources:
+**hosted files (`assetBaseURL`).** no worker `blob:` or wasm/worklet `data:` sources:
 
 ```text
 Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' https://cdn.karanganesan.com https://huggingface.co https://*.hf.co; media-src 'self' blob:
@@ -29,25 +31,17 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval
 | directive | why |
 | --- | --- |
 | `script-src 'wasm-unsafe-eval'` | vocule runs webassembly |
-| `script-src data:` | built-in setup only: the capture worklet for `listen()` and `record()` is a `data:` url |
-| `worker-src blob:` or `'self'` | the built-in worker is a `blob:` url; the hosted worker is on your origin |
-| `connect-src` model hosts | the model comes from `https://cdn.karanganesan.com`, falling back to `https://huggingface.co` and its download hosts `https://*.hf.co`; with `modelBaseURL`, list that origin instead |
-| `connect-src data:` | built-in setup only: the built-in worker loads its webassembly from a `data:` url |
-| `media-src blob:` | `clip.play()` plays a `blob:` url |
+| `script-src data:` | built-in capture worklet for `listen()` and `record()` |
+| `worker-src blob:` or `'self'` | built-in worker uses a `blob:` url; hosted worker stays on your origin |
+| `connect-src` model hosts | verified cdn first, pinned hugging face and `*.hf.co` download hosts as fallback; with `modelBaseURL`, list that origin instead |
+| `connect-src data:` | built-in worker loads its webassembly from a `data:` url |
+| `media-src blob:` | `clip.play()` |
 
-also allow any origin the app passes to `transcribe()` as a url. when a directive is missing, the browser console names it, and vocule fails like this:
-
-| blocked | result |
-| --- | --- |
-| the worker | `BACKEND_UNAVAILABLE`: "the speech worker failed. check worker csp and urls." |
-| `data:` in `connect-src` (built-in worker) | `BACKEND_UNAVAILABLE` during preparation; the console names the blocked source |
-| `'wasm-unsafe-eval'` | preparation fails; the console names the blocked webassembly compilation |
-| the capture worklet | `listen()` and `record()` reject with a `DOMException` named `AbortError`: "Unable to load a worklet's module" |
-| the model hosts | `NETWORK` |
+also allow any origin passed to `transcribe()` as an audio url. the browser console names blocked directives. a blocked worker or wasm generally fails with `BACKEND_UNAVAILABLE`; unreachable model hosts fail with `NETWORK`. a blocked capture worklet can reject with the browser's `AbortError` and “Unable to load a worklet's module”.
 
 ## hosting vocule's files on your origin
 
-copy the package's `dist` folder into the folder the app serves as static files, and point vocule at it:
+copy the root `dist` tree for the root factory, retaining relative imports:
 
 ```sh
 mkdir -p public/vocule
@@ -55,69 +49,109 @@ cp -R node_modules/@karanganesan/vocule/dist/. public/vocule/
 ```
 
 ```ts
-const speech = createSpeech({ assetBaseURL: "/vocule/" });
+import { createSpeech } from "@karanganesan/vocule";
+const speech = createSpeech({
+  model: "fermionresearch/phonon-2",
+  assetBaseURL: "/vocule/",
+});
 ```
 
 - the static folder is `public/` in vite, next.js, nuxt, astro and recent angular projects (`src/assets/` in older angular ones), and `static/` in sveltekit.
-- the folder must be on the page's own origin, with its files at their relative paths; a worker on another origin fails with `CAPABILITY`.
-- serve `.wasm` files as `application/wasm`.
-- copy again after every vocule upgrade. a script keeps it in step, for example `"prebuild": "rm -rf public/vocule && cp -R node_modules/@karanganesan/vocule/dist public/vocule"` in `package.json`, with `public/vocule/` in `.gitignore`.
-- `assetBaseURL` covers the worker and the capture worklet. `workerFactory` builds the worker yourself (`new Worker(url, { type: "module" })` for `@karanganesan/vocule/worker`) and `workletURL` on `listen()` or `record()` overrides the worklet; both are only needed when one of them lives somewhere else.
+- keep workers on the page's own origin; a different worker origin fails with `CAPABILITY`. serve wasm as `application/wasm` and modules as javascript.
+- copy again after every upgrade. a prebuild copy script can keep generated hosting files in step; ignore that copied directory in version control.
+- `assetBaseURL` covers the worker and capture worklet. `workerFactory: () => Worker` keeps its zero-argument signature and takes priority. `workletURL` on `listen()` or `record()` overrides capture's worklet when needed.
+
+### lean hosted entries
+
+copy only the matching model directory for a lean factory:
+
+```sh
+mkdir -p public/vocule/phonon-2
+cp -R node_modules/@karanganesan/vocule/dist/phonon-2/. public/vocule/phonon-2/
+```
+
+```ts
+import { createSpeech } from "@karanganesan/vocule/phonon-2";
+const speech = createSpeech({
+  model: "fermionresearch/phonon-2",
+  assetBaseURL: "/vocule/phonon-2/",
+});
+```
+
+for redux use `@karanganesan/vocule/parakeet-redux`, the matching required `model: "moondream/parakeet-redux"`, and `dist/parakeet-redux/`. the applicable directory contains its own `worker.js` and minimal asset tree. root `dist/worker.js` dispatches lazily to both choices. matching worker exports are `@karanganesan/vocule/worker`, `@karanganesan/vocule/phonon-2/worker` and `@karanganesan/vocule/parakeet-redux/worker`.
+
+a supplied stale or wrong-model worker fails its version/supported-id handshake with `CAPABILITY` before weights load. copy the entire applicable tree from the same package version, including required notices, rather than mixing old workers with new factories.
 
 ## serving the model yourself
 
-by default the model comes from vocule's cdn, falling back to hugging face. to serve it from your own origin or storage, download the pinned revision's files once, using the urls in the installed package:
+each selected model uses a verified cdn mirror first and an immutable hugging face fallback for **the same artifact bytes and checkpoint**. this is transport recovery: it never uploads audio or substitutes another model. phonon's canonical source repository is `FermionResearch/Phonon-2`; the public option remains lowercase.
 
-```sh
-BASE=$(node --input-type=module -e 'import { MODEL_CDN_URL } from "@karanganesan/vocule/model"; console.log(MODEL_CDN_URL)')
-mkdir -p public/models/parakeet-redux
-for file in config.json ternary.json tokenizer.json model.safetensors README.md; do
-  curl -fL "$BASE$file" -o "public/models/parakeet-redux/$file"
-done
+use the installed selected descriptor instead of a fixed four-file loop. this metadata-only staging script does not run an inference engine:
+
+```ts
+// scripts/stage-speech-model.ts (run with bun)
+import { mkdir } from "node:fs/promises";
+import { getModelDescriptor } from "@karanganesan/vocule/model";
+
+const descriptor = getModelDescriptor("fermionresearch/phonon-2");
+const directory = "public/models/phonon-2";
+await mkdir(directory, { recursive: true });
+for (const artifact of descriptor.artifacts) {
+  const response = await fetch(new URL(artifact.name, descriptor.sources[0]));
+  if (!response.ok) throw new Error(`model download failed: ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (bytes.byteLength !== artifact.bytes || hash !== artifact.sha256)
+    throw new Error(`model identity mismatch: ${artifact.name}`);
+  await Bun.write(`${directory}/${artifact.name}`, bytes);
+}
 ```
 
 ```ts
-const speech = createSpeech({ modelBaseURL: "/models/parakeet-redux/" });
+const speech = createSpeech({
+  model: "fermionresearch/phonon-2",
+  modelBaseURL: "/models/phonon-2/",
+});
 ```
 
-- the model binary must keep its pinned sha-256 and byte length. vocule also checks pinned hashes for the three metadata files; only supply `artifactHashes` when a mirror intentionally serves different metadata bytes. unexpected changes fail with `INTEGRITY`.
-- with `modelBaseURL` there is no fallback source.
-- serve the files over https (plain http works on localhost). another origin needs cors, and a content security policy must list it in `connect-src`.
-- `model.safetensors` is about 178 mb; some static hosts cap file sizes, so object storage or a cdn may suit it better. cache it for a long time: the revision never changes.
-- `README.md` is the model card. the weights are licensed cc by 4.0: keep the card and the attribution with any copy you serve.
-- repeat the download after upgrading vocule, since a new version can pin a new revision (`MODEL.revision` in `@karanganesan/vocule/model`).
+- `modelBaseURL` mirrors the **selected pinned representation**, with no default-source fallback. it is not an arbitrary-model loader. redux uses safetensors plus its three metadata files. phonon's cold representation is the byte-identical `phonon-2.bps.tar.zst`, containing `model.fermion`, authoritative `config.json`/`packed_manifest.json` and its attestation. do not substitute the different root metadata or a derived pack.
+- keep exact filenames, bytes, hashes and lengths from the installed descriptor/release provenance. serve `.zst` as `application/zstd`, safetensors as `application/octet-stream`, json as `application/json`, and unchanged notices as text. model files do not use a texture's four-byte alignment rule.
+- `artifactHashes` is discriminated by `model`: redux uses `config.json`, `ternary.json`, `tokenizer.json`; phonon uses `config.json`, `packed_manifest.json`. metadata overrides cannot change weight pins, checkpoint or architecture. ordinary mirrors retain the pinned hashes.
+- use https (localhost http is allowed). a different model origin needs cors and a `connect-src` allowance. immutable storage/cdn hosts suit files larger than a static host's cap; never overwrite a pinned url.
+- **before serving a mirror**, retain the applicable model card, source/revision/change attribution, cc by 4.0 weight license and supplied notices from the verified redistribution set. phonon supplies `LICENSE-WEIGHTS-CC-BY-4.0.txt`, `NOTICE` and an apache-2.0 code license for reference code; redux retains moondream/nvidia credit. the sdk's code license does not relicense weights. a notice/card may use a text filename when its bytes and mapping are preserved. copying only runtime artifacts does not complete redistribution attribution.
+- repeat staging after an upgrade. source checkpoint bytes, compressed transfer, extracted/repacked cache bytes and gpu/wasm/process residency are distinct quantities.
+- preserve the original checkpoint bytes and all reconstructed source weight values. compact cache layouts are lossless storage; their version and access layout can change while checkpoint identity and values stay fixed.
 
 ## caching
 
-- with the default `cache: true`, the verified model is kept in the browser's cache storage, and later visits prepare without downloading it.
-- browsers can evict cache storage under storage pressure, and private windows do not keep it. `navigator.storage.persist()` asks the browser to keep the site's storage; call it after a successful preparation if the app depends on the model being available.
-- `cache: false` stores nothing, for shared or kiosk machines.
-- clearing the site's data removes the model; the next preparation downloads it again.
+- `cache: true` reuses verified bytes after reload. redux preserves the exact 1.x cache name and keys, so 2.0.0 can reuse a populated 1.0.0 redux cache. phonon uses separate checkpoint/member-hash/pack-version keys independent of serving host; warm preparation reuses verified extracted/repacked bytes without decompressing the archive again.
+- `getModelCacheStatus(id)` reads key presence only. a selector may display that hint; preparation still verifies integrity. do not download or hash full weights just to draw a picker.
+- corrupt entries are replaced individually. quota failure is tolerated without clearing the other model's cache. successful preparation proves readiness in memory, not that persistent cache writes succeeded; recheck the lightweight presence hint before labeling a model saved on this device.
+- browsers may evict site storage, and private windows may not persist it. `navigator.storage.persist()` can request retention after successful preparation. `cache: false` stores nothing; clearing site data makes the next preparation download again.
 
 ## bundlers, server rendering and tests
 
-- vocule is published as es modules only. `import` works everywhere; `require("@karanganesan/vocule")` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
-- bundlers that build for the browser pick vocule's browser build through its `browser` export condition. the engine and built-in worker load when the first model call needs them; verify the production bundle because output size and splitting depend on the bundler.
-- vite and bun apps need no configuration. with any other bundler, run the production build and prepare once in a browser before shipping; if the worker fails to start, use the hosted files above.
-- importing vocule during server rendering has no side effects, but every model call needs the browser. keep calls in effects and event handlers.
-- in unit tests (vitest, jest with jsdom), there is no webgpu or worker: mock the shared `src/lib/speech.ts` module instead of vocule itself, and test real transcription in a browser, for example with playwright against chromium.
+- vocule is es modules only; use `import`. `require("@karanganesan/vocule")` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+- browser bundlers select the browser export condition. root factories dispatch lazily; a lean entry excludes the other adapter/reader/worker assets and still requires its matching id. verify actual production output, including inline-worker contents, rather than assuming a root runtime string guarantees elimination.
+- metadata imports no worker, wasm or engine. the audited 2.0.0 vite fixture importing the descriptor and cache-status helpers emitted 4,994 javascript bytes; the legacy `MODEL`-only fixture emitted 959 bytes. application and bundler choices change emitted size.
+- vite and bun need no special configuration. test production preparation/transcription with the target bundler; hosted files are available when its worker handling requires them.
+- imports during server rendering have no model side effects, but model calls belong in browser events/effects/mount hooks.
+- jsdom unit tests lack webgpu/workers. mock the app's shared `src/lib/speech.ts` and use real browser tests for inference, inline/hosted/csp paths, capture, cancellation and both choices.
 
 ## browser support
 
-vocule needs webgpu, webassembly and a secure context (https or localhost). it was tested in chrome 153 and safari 26.6 on apple silicon; other browsers, gpus, phones and low-memory devices are not measured, so test the ones you plan to support.
-
-a quick check decides whether to show the feature at all:
+vocule needs webgpu, webassembly and https or localhost. the audited 2.0.0 candidate passed both-model correctness and capture checks in chrome 153 and native safari 27 on the tested m4 macbook air. performance observations are sparse and recorded under background load; safari live and long-file timings were not measured, and the planned performance and repeated memory qualification remains incomplete. other devices, phones, low-memory adapters and browsers need their own evidence. phone layout testing does not prove phone inference support. no full-model wasm-only/webgl or cloud inference fallback is shipped.
 
 ```ts
-// src/lib/speech-support.ts
 export function mightSupportSpeech(): boolean {
   return globalThis.isSecureContext === true && "gpu" in navigator;
 }
 ```
 
-it cannot prove that a working gpu adapter exists: on a device that passes it but cannot run the model, `prepare()` fails with `BACKEND_UNAVAILABLE`, so handle that code too. `runDiagnostics()` from `@karanganesan/vocule/diagnostics` runs a quick self-test of the browser's webgpu and webassembly support, useful on a support or debug page. which audio and video formats `transcribe()` accepts depends on the browser's decoder; wav works everywhere vocule runs.
+this does not prove a usable gpu adapter exists. `prepare()` may fail with `BACKEND_UNAVAILABLE`; handle it. `runDiagnostics()` from `@karanganesan/vocule/diagnostics` is a browser webgpu/wasm self-test, not a model quality test. audio/video formats depend on the browser decoder; wav works wherever vocule runs.
 
 ## iframes and browser extensions
 
-- a cross-origin iframe needs `allow="microphone"` for `listen()` and `record()`, and the parent's `permissions-policy` must not block the microphone.
-- extension pages (manifest v3) have a strict default policy, so use the hosted-files setup: package `node_modules/@karanganesan/vocule/dist` at `vocule/` in the extension, pass `createSpeech({ assetBaseURL: chrome.runtime.getURL("vocule/") })`, add `'wasm-unsafe-eval'` to the `extension_pages` policy, and make sure the model hosts are reachable. this path has not been tested; verify it in the target browser.
+- cross-origin microphone use needs `allow="microphone"` on the iframe and an unblocked parent `permissions-policy`.
+- manifest v3 extension pages should use hosted assets, the selected model and `'wasm-unsafe-eval'` in the `extension_pages` policy. example: `createSpeech({ model: "fermionresearch/phonon-2", assetBaseURL: chrome.runtime.getURL("vocule/") })`. preserve matching asset paths and model-host policy. this extension path remains untested; validate in the target browser.
